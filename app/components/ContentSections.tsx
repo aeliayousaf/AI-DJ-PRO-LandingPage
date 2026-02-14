@@ -100,7 +100,7 @@ function ImagePlaceholder({
           <img
             src={src}
             alt={label ?? ''}
-            className="absolute inset-0 h-full w-full"
+            className="absolute inset-0 h-full w-full max-w-full max-h-full"
             style={{ objectFit }}
             onError={() => setImgError(true)}
           />
@@ -533,14 +533,14 @@ export default function ContentSections() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            className="w-full min-w-0 overflow-hidden"
           >
             <ImagePlaceholder
               src="/images/performance-interface.gif"
               aspectRatio="wide"
               gradient="default"
               label="Performance interface"
-              className="max-w-5xl mx-auto h-[500px]"
-              //objectFit="contain"
+              className="w-full min-w-0 max-w-5xl mx-auto"
             />
           </motion.div>
         </div>
