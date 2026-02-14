@@ -192,8 +192,8 @@ export default function AIDJProScroll() {
                         className="absolute inset-0 flex items-center justify-end px-8 md:px-20"
                     >
                         <div className="bg-black/20 backdrop-blur-sm p-6 rounded-2xl border border-white/5 max-w-lg text-right">
-                            <h2 className="text-3xl md:text-5xl font-bold mb-4">From Bedroom<br />to Festival Stages</h2>
-                            <p className="text-lg md:text-xl text-white/60">Seamless hardware integration that scales with your ambition. Build complex routines in seconds.</p>
+                            <h2 className="text-3xl md:text-5xl font-bold mb-4">We Took Apart the<br />Brain of DJing</h2>
+                            <p className="text-lg md:text-xl text-white/60">AI DJ Pro breaks down the mechanics of track selection, energy flow, timing, and crowd response — and reconstructs them into an intelligent performance engine.</p>
                         </div>
                     </motion.div>
 

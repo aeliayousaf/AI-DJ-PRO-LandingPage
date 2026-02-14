@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useInView } from 'framer-motion';
 
 const fadeUp = {
@@ -42,15 +43,25 @@ function ImagePlaceholder({
   gradient = 'default',
   className = '',
   src,
+  zoomOnHover = false,
+  objectFit = 'cover',
 }: {
   aspectRatio?: 'video' | 'square' | 'wide' | 'tall';
   label?: string;
   gradient?: 'default' | 'warm' | 'cool' | 'glow';
   className?: string;
   src?: string;
+  zoomOnHover?: boolean;
+  objectFit?: 'cover' | 'contain';
 }) {
   const [imgError, setImgError] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [zoomFocus, setZoomFocus] = useState({ x: 0.5, y: 0.5 }); // 0-1, where cursor points in image
+  const containerRef = useRef<HTMLDivElement>(null);
   const showImage = src && !imgError;
+  const showZoom = zoomOnHover && showImage && isHovering;
+
   const aspectMap = {
     video: 'aspect-video',
     square: 'aspect-square',
@@ -63,38 +74,84 @@ function ImagePlaceholder({
     cool: 'from-blue-500/20 via-cyan-500/10 to-transparent',
     glow: 'from-white/20 via-purple-500/10 to-transparent',
   };
+
+  const handleMouseEnter = () => setIsHovering(true);
+  const handleMouseLeave = () => setIsHovering(false);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      setZoomFocus({ x, y });
+    }
+  };
+
   return (
-    <div
-      className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] ${aspectMap[aspectRatio]} ${className}`}
-    >
-      {showImage ? (
-        <img
-          src={src}
-          alt={label ?? ''}
-          className="absolute inset-0 h-full w-full object-cover"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <>
-          <div
-            className={`absolute inset-0 bg-gradient-to-br ${gradientMap[gradient]} opacity-60`}
+    <>
+      <div
+        ref={containerRef}
+        className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] ${aspectMap[aspectRatio]} ${className} ${zoomOnHover ? 'cursor-zoom-in' : ''}`}
+        onMouseEnter={zoomOnHover ? handleMouseEnter : undefined}
+        onMouseLeave={zoomOnHover ? handleMouseLeave : undefined}
+        onMouseMove={zoomOnHover ? handleMouseMove : undefined}
+      >
+        {showImage ? (
+          <img
+            src={src}
+            alt={label ?? ''}
+            className="absolute inset-0 h-full w-full"
+            style={{ objectFit }}
+            onError={() => setImgError(true)}
           />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-px w-24 bg-white/20 rounded-full animate-pulse" />
+        ) : (
+          <>
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${gradientMap[gradient]} opacity-60`}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-px w-24 bg-white/20 rounded-full animate-pulse" />
+            </div>
+          </>
+        )}
+        {label && (
+          <div className="absolute bottom-4 left-4 right-4 text-center text-sm text-white/30 font-medium tracking-wide drop-shadow-lg">
+            {label}
           </div>
-        </>
-      )}
-      {label && (
-        <div className="absolute bottom-4 left-4 right-4 text-center text-sm text-white/30 font-medium tracking-wide drop-shadow-lg">
-          {label}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+      {showZoom &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.15 }}
+            className="fixed pointer-events-none z-[9999] rounded-2xl overflow-hidden border border-white/20 bg-black/90 shadow-2xl shadow-black/80"
+            style={{
+              left: mousePos.x,
+              top: mousePos.y,
+              transform: 'translate(20px, 20px)',
+              width: 560,
+              height: 420,
+              backgroundImage: `url(${src})`,
+              backgroundSize: '300%',
+              backgroundPosition: `${280 - zoomFocus.x * 1680}px ${210 - zoomFocus.y * 1260}px`,
+              backgroundRepeat: 'no-repeat',
+            }}
+          />,
+          document.body
+        )}
+    </>
   );
 }
 
+const showSocialProof = false; // Set to true to show Social Proof section
+
 export default function ContentSections() {
   const containerRef = useRef(null);
+  const [hoveredPlanIndex, setHoveredPlanIndex] = useState<number | null>(null);
 
   return (
     <div ref={containerRef}>
@@ -153,12 +210,12 @@ export default function ContentSections() {
               viewport={{ once: true, margin: '-50px' }}
               transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] as const }}
             >
-              <ImagePlaceholder
-                src="/images/product-interface.jpg"
+             <ImagePlaceholder
+                src="/images/robot-dj-performs-stockcake.jpg"
                 aspectRatio="video"
-                label="Product interface"
+                //label="Product interface"
                 gradient="glow"
-                className="shadow-2xl shadow-black/50"
+                className="shadow-2xl shadow-black/50 w-full max-w-lg h-[650px]"
               />
             </motion.div>
           </div>
@@ -185,7 +242,7 @@ export default function ContentSections() {
             {[
               {
                 title: 'Intelligent Track Analysis',
-                desc: 'Every track is analyzed for BPM, key, structure, and energy profile. AI DJ Pro suggests the best next track based on flow, not guesswork.',
+                desc: 'Every track is analyzed for BPM, key, and structur. AI DJ Pro suggests the best next track based on flow, not guesswork.',
                 gradient: 'cool' as const,
                 src: '/images/track-analysis.jpg',
               },
@@ -203,7 +260,7 @@ export default function ContentSections() {
               },
               {
                 title: 'Smart Auto-Ducking',
-                desc: 'When you speak, the music intelligently lowers. No messy volume juggling. Clean transitions every time.',
+                desc: 'When you speak, the music intelligently lowers. No messy volume juggling. Clean transitions every time. Manual override available.',
                 gradient: 'default' as const,
                 src: '/images/auto-ducking.jpg',
               },
@@ -218,7 +275,7 @@ export default function ContentSections() {
               >
                 <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04]">
                   <div className="aspect-[16/10]">
-                    <ImagePlaceholder src={feature.src} gradient={feature.gradient} />
+                    <ImagePlaceholder src={feature.src} gradient={feature.gradient} zoomOnHover />
                   </div>
                   <div className="p-8">
                     <h3 className="text-2xl font-semibold mb-4 group-hover:text-white transition-colors">
@@ -238,7 +295,7 @@ export default function ContentSections() {
               <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] transition-all duration-500 hover:border-white/20">
                 <div className="grid md:grid-cols-2 gap-0">
                   <div className="aspect-video md:aspect-auto md:min-h-[280px]">
-                    <ImagePlaceholder src="/images/library-integration.jpg" gradient="default" />
+                    <ImagePlaceholder src="/images/library-integration.jpg" gradient="default" objectFit="contain" />
                   </div>
                   <div className="p-8 md:p-12 flex flex-col justify-center">
                     <h3 className="text-2xl font-semibold mb-4">
@@ -272,7 +329,7 @@ export default function ContentSections() {
                 src="/images/dj-action.jpg"
                 aspectRatio="square"
                 gradient="warm"
-                label="DJ in action"
+                //label="DJ in action"
                 className="min-h-[400px]"
               />
             </motion.div>
@@ -346,12 +403,12 @@ export default function ContentSections() {
                 src: '/images/clubs.jpg',
               },
               {
-                title: 'Weddings & Private Events',
+               title: 'Weddings & Private Events',
                 desc: 'Use AI MC support for smooth introductions, cake cutting, speeches, and transitions.',
                 src: '/images/weddings.jpg',
               },
               {
-                title: 'Corporate Events',
+               title: 'Corporate Events',
                 desc: 'Branded AI voice intros, sponsor shoutouts, and structured event flow.',
                 src: '/images/corporate.jpg',
               },
@@ -407,7 +464,7 @@ export default function ContentSections() {
               {[
                 'Import your music library',
                 'Let AI DJ Pro analyze tracks',
-                'Build your set or mix live',
+                'Enable the MC',
                 'Get real-time transition suggestions',
                 'Control the crowd with confidence',
               ].map((step, i) => (
@@ -478,11 +535,12 @@ export default function ContentSections() {
             viewport={{ once: true }}
           >
             <ImagePlaceholder
-              src="/images/performance-interface.jpg"
+              src="/images/performance-interface.gif"
               aspectRatio="wide"
               gradient="default"
               label="Performance interface"
-              className="max-w-5xl mx-auto"
+              className="max-w-5xl mx-auto h-[500px]"
+              //objectFit="contain"
             />
           </motion.div>
         </div>
@@ -504,25 +562,31 @@ export default function ContentSections() {
               Pricing
             </p>
           </motion.div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-6 items-center">
             {[
               {
                 title: 'Starter',
                 desc: 'Perfect for new DJs. Core AI analysis + mixing tools.',
                 featured: false,
-                src: '/images/pricing-starter.jpg',
+                price: '$29',
+                period: '/month',
+                accent: 'blue',
               },
               {
                 title: 'Pro',
                 desc: 'Full performance suite. AI MC voice + auto ducking + energy mapping.',
                 featured: true,
-                src: '/images/pricing-pro.jpg',
+                price: '$79',
+                period: '/month',
+                accent: 'purple',
               },
               {
                 title: 'Elite',
                 desc: 'Advanced customization. Branded voice packs + priority support + event templates.',
                 featured: false,
-                src: '/images/pricing-elite.jpg',
+                price: '$149',
+                period: '/month',
+                accent: 'amber',
               },
             ].map((plan, i) => (
               <motion.div
@@ -530,40 +594,56 @@ export default function ContentSections() {
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className={`relative overflow-hidden rounded-3xl border p-8 transition-all duration-500 hover:border-white/20 ${
-                  plan.featured
-                    ? 'border-white/30 bg-white/[0.06] ring-1 ring-white/20'
-                    : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]'
+                onMouseEnter={() => setHoveredPlanIndex(i)}
+                onMouseLeave={() => setHoveredPlanIndex(null)}
+                animate={{
+                  scale: hoveredPlanIndex === i ? 1.08 : hoveredPlanIndex !== null ? 0.96 : 1,
+                  filter: hoveredPlanIndex !== null && hoveredPlanIndex !== i ? 'blur(4px)' : 'blur(0px)',
+                }}
+                transition={{
+                  opacity: { duration: 0.5, delay: i * 0.1 },
+                  y: { duration: 0.5, delay: i * 0.1 },
+                  scale: { type: 'spring', stiffness: 300, damping: 25 },
+                  filter: { duration: 0.25 },
+                }}
+                className={`relative overflow-hidden rounded-3xl border p-8 cursor-pointer ${
+                  plan.accent === 'blue'
+                    ? 'border-cyan-500/30 bg-cyan-500/[0.06] hover:border-cyan-400/40 hover:bg-cyan-500/[0.08]'
+                    : plan.accent === 'purple'
+                    ? 'border-purple-500/40 bg-purple-500/[0.08] ring-1 ring-purple-400/20 hover:border-purple-400/50 hover:bg-purple-500/[0.1]'
+                    : 'border-amber-500/30 bg-amber-500/[0.06] hover:border-amber-400/40 hover:bg-amber-500/[0.08]'
                 }`}
               >
                 {plan.featured && (
-                  <div className="absolute top-0 right-0 px-4 py-1.5 bg-white/10 rounded-bl-xl text-xs font-medium">
+                  <div className="absolute top-0 right-0 px-4 py-1.5 bg-purple-500/30 rounded-bl-xl text-xs font-medium">
                     Popular
                   </div>
                 )}
                 <h3 className="text-2xl font-semibold mb-3">{plan.title}</h3>
-                <p className="text-white/60 mb-8">{plan.desc}</p>
-                <div className="h-24 rounded-2xl overflow-hidden mb-6">
-                  <ImagePlaceholder src={plan.src} gradient="default" aspectRatio="wide" />
+                <div className="mb-6">
+                  <span className="text-4xl font-bold">{plan.price}</span>
+                  <span className="text-white/50 text-lg">{plan.period}</span>
                 </div>
+                <p className="text-white/60 mb-8">{plan.desc}</p>
+                <button
+                  className={`w-full py-3 px-6 rounded-full font-medium transition-all duration-300 ${
+                    plan.accent === 'blue'
+                      ? 'border border-cyan-400/50 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
+                      : plan.accent === 'purple'
+                      ? 'bg-purple-500 text-white hover:bg-purple-400'
+                      : 'border border-amber-400/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
+                  }`}
+                >
+                  Try now
+                </button>
               </motion.div>
             ))}
           </div>
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="text-center mt-10"
-          >
-            <button className="px-8 py-4 rounded-full border border-white/30 font-medium hover:bg-white/10 transition-all duration-300 hover:scale-[1.02]">
-              Compare Plans
-            </button>
-          </motion.div>
         </div>
       </AnimatedSection>
 
       {/* Social Proof */}
+      {showSocialProof && (
       <AnimatedSection
         className="py-32 px-6 md:px-12 border-t border-white/[0.06] bg-[#080808]"
         delay={0}
@@ -626,6 +706,7 @@ export default function ContentSections() {
           </motion.div>
         </div>
       </AnimatedSection>
+      )}
 
       {/* Final CTA */}
       <AnimatedSection
