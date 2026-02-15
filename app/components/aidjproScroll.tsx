@@ -71,19 +71,32 @@ export default function AIDJProScroll() {
 
         const w = canvas.width;
         const h = canvas.height;
-
-        // Contain logic
         const imgRatio = img.width / img.height;
         const canvasRatio = w / h;
+        const isPortrait = h > w;
 
-        let drawW, drawH;
+        let drawW: number;
+        let drawH: number;
 
-        if (canvasRatio > imgRatio) {
-            drawH = h;
-            drawW = h * imgRatio;
+        // Use "cover" on mobile (portrait) to fill screen and remove black bars; "contain" on desktop
+        if (isPortrait) {
+            // Cover: scale to fill, may crop edges
+            if (canvasRatio > imgRatio) {
+                drawW = w;
+                drawH = w / imgRatio;
+            } else {
+                drawH = h;
+                drawW = h * imgRatio;
+            }
         } else {
-            drawW = w;
-            drawH = w / imgRatio;
+            // Contain: fit within, may show letterboxing
+            if (canvasRatio > imgRatio) {
+                drawH = h;
+                drawW = h * imgRatio;
+            } else {
+                drawW = w;
+                drawH = w / imgRatio;
+            }
         }
 
         const x = (w - drawW) / 2;
@@ -201,10 +214,10 @@ export default function AIDJProScroll() {
                     <motion.div
                         initial={{ opacity: 0 }}
                         style={{ opacity: opacity4, scale: scale4 }}
-                        className="absolute inset-0 flex items-center justify-center flex-col"
+                        className="absolute inset-0 flex items-center justify-center flex-col px-4 sm:px-6"
                     >
-                        <h2 className="text-4xl md:text-7xl font-bold text-center mb-6">More Than Mixing.<br /><span className="text-white/50">It’s Performance Intelligence.</span></h2>
-                        <button className="pointer-events-auto mt-8 px-10 py-4 bg-white text-black font-bold rounded-full text-lg hover:bg-gray-200 transition-all hover:scale-105 active:scale-95">
+                        <h2 className="text-3xl sm:text-4xl md:text-7xl font-bold text-center mb-4 md:mb-6">More Than Mixing.<br /><span className="text-white/50">It’s Performance Intelligence.</span></h2>
+                        <button className="pointer-events-auto mt-4 md:mt-8 px-10 py-4 bg-white text-black font-bold rounded-full text-lg hover:bg-gray-200 transition-all hover:scale-105 active:scale-95">
                             GET EARLY ACCESS
                         </button>
                     </motion.div>

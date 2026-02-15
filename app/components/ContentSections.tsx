@@ -1,8 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useInView } from 'framer-motion';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -17,16 +21,19 @@ function AnimatedSection({
   children,
   className = '',
   delay = 0,
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
   delay?: number;
+  id?: string;
 }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-80px' });
   return (
     <motion.section
       ref={ref}
+      id={id}
       initial={{ opacity: 0, y: 50 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.7, delay, ease: [0.25, 0.46, 0.45, 0.94] as const }}
@@ -44,6 +51,7 @@ function ImagePlaceholder({
   className = '',
   src,
   zoomOnHover = false,
+  clickToZoom = false,
   objectFit = 'cover',
 }: {
   aspectRatio?: 'video' | 'square' | 'wide' | 'tall';
@@ -52,12 +60,15 @@ function ImagePlaceholder({
   className?: string;
   src?: string;
   zoomOnHover?: boolean;
+  clickToZoom?: boolean;
   objectFit?: 'cover' | 'contain';
 }) {
   const [imgError, setImgError] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [zoomFocus, setZoomFocus] = useState({ x: 0.5, y: 0.5 }); // 0-1, where cursor points in image
+  const [zoomFocus, setZoomFocus] = useState({ x: 0.5, y: 0.5 });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [hoveringClickZoom, setHoveringClickZoom] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const showImage = src && !imgError;
   const showZoom = zoomOnHover && showImage && isHovering;
@@ -87,14 +98,32 @@ function ImagePlaceholder({
     }
   };
 
+  useEffect(() => {
+    if (!clickToZoom || !modalOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalOpen(false);
+    };
+    document.addEventListener('keydown', handleEscape);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
+    };
+  }, [clickToZoom, modalOpen]);
+
   return (
     <>
       <div
         ref={containerRef}
-        className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] ${aspectMap[aspectRatio]} ${className} ${zoomOnHover ? 'cursor-zoom-in' : ''}`}
-        onMouseEnter={zoomOnHover ? handleMouseEnter : undefined}
-        onMouseLeave={zoomOnHover ? handleMouseLeave : undefined}
+        className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] ${aspectMap[aspectRatio]} ${className} ${
+          zoomOnHover ? 'cursor-zoom-in' : clickToZoom ? 'cursor-pointer' : ''
+        }`}
+        onMouseEnter={zoomOnHover ? handleMouseEnter : clickToZoom ? () => setHoveringClickZoom(true) : undefined}
+        onMouseLeave={zoomOnHover ? handleMouseLeave : clickToZoom ? () => setHoveringClickZoom(false) : undefined}
         onMouseMove={zoomOnHover ? handleMouseMove : undefined}
+        onClick={clickToZoom && showImage ? () => setModalOpen(true) : undefined}
+        role={clickToZoom ? 'button' : undefined}
+        title={clickToZoom ? 'Click to zoom' : undefined}
       >
         {showImage ? (
           <img
@@ -117,6 +146,13 @@ function ImagePlaceholder({
         {label && (
           <div className="absolute bottom-4 left-4 right-4 text-center text-sm text-white/30 font-medium tracking-wide drop-shadow-lg">
             {label}
+          </div>
+        )}
+        {clickToZoom && showImage && hoveringClickZoom && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-3xl">
+            <span className="text-white/90 font-medium text-sm px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm">
+              Click to zoom
+            </span>
           </div>
         )}
       </div>
@@ -143,6 +179,35 @@ function ImagePlaceholder({
           />,
           document.body
         )}
+      {modalOpen && clickToZoom && src && typeof document !== 'undefined' &&
+        createPortal(
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
+            onClick={() => setModalOpen(false)}
+          >
+            <button
+              onClick={() => setModalOpen(false)}
+              className="absolute top-6 right-6 z-10 rounded-full bg-white/10 px-4 py-2 text-white hover:bg-white/20 transition-colors"
+              aria-label="Close"
+            >
+              Close
+            </button>
+            <div
+              className="max-h-[90vh] max-w-[90vw]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={src}
+                alt={label ?? 'Zoomed view'}
+                className="max-h-[90vh] max-w-full object-contain"
+              />
+            </div>
+          </motion.div>,
+          document.body
+        )}
     </>
   );
 }
@@ -150,8 +215,43 @@ function ImagePlaceholder({
 const showSocialProof = false; // Set to true to show Social Proof section
 
 export default function ContentSections() {
-  const containerRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredPlanIndex, setHoveredPlanIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    let ctx: ReturnType<typeof gsap.context>;
+    const timer = setTimeout(() => {
+      ctx = gsap.context(() => {
+        gsap.utils.toArray<HTMLElement>('[data-blur-reveal]').forEach((el) => {
+          const text = el.textContent ?? '';
+          const words = text.split(/\s+/).filter(Boolean);
+          el.innerHTML = words
+            .map((w) => `<span class="blur-word" style="display:inline-block">${w}</span>`)
+            .join(' ');
+          const wordSpans = el.querySelectorAll<HTMLElement>('.blur-word');
+          gsap.set(wordSpans, { filter: 'blur(16px)', opacity: 0.3 });
+          gsap.to(wordSpans, {
+            filter: 'blur(0px)',
+            opacity: 1,
+            duration: 0.4,
+            stagger: 0.06,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              start: 'top 90%',
+              end: 'top 35%',
+              scrub: 2.5,
+            },
+          });
+        });
+        ScrollTrigger.refresh();
+      }, containerRef);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      ctx?.revert();
+    };
+  }, []);
 
   return (
     <div ref={containerRef}>
@@ -172,11 +272,11 @@ export default function ContentSections() {
               <p className="text-xs font-medium tracking-[0.2em] text-white/40 uppercase">
                 What is AI DJ Pro?
               </p>
-              <h2 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.1]">
-                A Professional DJ Software With Real AI Built In
+              <h2 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.1]" data-blur-reveal>
+                A Professional DJ Software that requires no DJ.
               </h2>
               <p className="text-lg text-white/60 leading-relaxed max-w-lg">
-                AI DJ Pro is an advanced performance platform designed to assist DJs during live sets. It combines machine learning with professional mixing tools.
+              From track selection to energy control, transitions, and announcements — our AI handles the full performance experience.
               </p>
               <ul className="space-y-4">
                 {[
@@ -201,7 +301,7 @@ export default function ContentSections() {
                 ))}
               </ul>
               <p className="text-xl font-medium text-white/90 pt-4">
-                It works with you, not instead of you.
+              Just you and your music.
               </p>
             </motion.div>
             <motion.div
@@ -224,6 +324,7 @@ export default function ContentSections() {
 
       {/* Core Features */}
       <AnimatedSection
+        id="features"
         className="py-32 px-6 md:px-12 border-t border-white/[0.06] bg-[#080808]"
         delay={0}
       >
@@ -275,7 +376,7 @@ export default function ContentSections() {
               >
                 <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04]">
                   <div className="aspect-[16/10]">
-                    <ImagePlaceholder src={feature.src} gradient={feature.gradient} zoomOnHover />
+                    <ImagePlaceholder src={feature.src} gradient={feature.gradient} clickToZoom />
                   </div>
                   <div className="p-8">
                     <h3 className="text-2xl font-semibold mb-4 group-hover:text-white transition-colors">
@@ -340,21 +441,21 @@ export default function ContentSections() {
               className="order-1 lg:order-2 space-y-8"
             >
               <p className="text-xs font-medium tracking-[0.2em] text-white/40 uppercase">
-                Why DJs Are Switching
+                Who it's good for?
               </p>
-              <h2 className="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.15]">
-                Stop Guessing. Start Controlling the Room.
+              <h2 className="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.15]" data-blur-reveal>
+              When There’s No DJ, AI DJ Pro Takes Over.
               </h2>
               <p className="text-lg text-white/60">
-                Most DJ software stops at mixing. AI DJ Pro helps you control the experience.
+              Perfect for lounges, corporate events, private parties, and venues that need professional sound without hiring talent.
               </p>
               <ul className="space-y-3">
                 {[
-                  'Better transitions',
-                  'Smarter song selection',
-                  'Cleaner announcements',
-                  'Higher energy retention',
-                  'Stronger crowd response',
+                  'Mixes seamlessly',
+                  'Maintains energy flow',
+                  'Makes event announcements',
+                  'Adapts to crowd mood',
+                  'Controls transitions automatically',
                 ].map((item, i) => (
                   <motion.li
                     key={item}
@@ -445,6 +546,7 @@ export default function ContentSections() {
 
       {/* How It Works */}
       <AnimatedSection
+        id="how-it-works"
         className="py-32 px-6 md:px-12 border-t border-white/[0.06] bg-[#050505]"
         delay={0}
       >
@@ -465,8 +567,8 @@ export default function ContentSections() {
                 'Import your music library',
                 'Let AI DJ Pro analyze tracks',
                 'Enable the MC',
-                'Get real-time transition suggestions',
-                'Control the crowd with confidence',
+                'Start session',
+                'Let the AI DJ Pro take over',
               ].map((step, i) => (
                 <motion.div
                   key={step}
@@ -548,6 +650,7 @@ export default function ContentSections() {
 
       {/* Pricing */}
       <AnimatedSection
+        id="pricing"
         className="py-32 px-6 md:px-12 border-t border-white/[0.06] bg-[#050505]"
         delay={0}
       >
@@ -719,8 +822,8 @@ export default function ContentSections() {
           viewport={{ once: true }}
           className="max-w-3xl mx-auto text-center space-y-8"
         >
-          <h2 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.1]">
-            Ready to DJ Smarter?
+          <h2 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.1]" data-blur-reveal>
+            Ready to DJ without a DJ?
           </h2>
           <p className="text-xl text-white/60">
             AI DJ Pro is not about replacing skill.
@@ -766,10 +869,10 @@ export default function ContentSections() {
                 About AI DJ Pro
               </h4>
               <ul className="space-y-3">
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">How It Works</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#features" className="text-white/70 hover:text-white transition-colors">Features</a></li>
+                <li><a href="#pricing" className="text-white/70 hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#how-it-works" className="text-white/70 hover:text-white transition-colors">How It Works</a></li>
+                
               </ul>
             </div>
             <div>
@@ -780,7 +883,7 @@ export default function ContentSections() {
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Help Center</a></li>
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Contact Us</a></li>
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Documentation</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">System Status</a></li>
+               
               </ul>
             </div>
             <div>
@@ -789,7 +892,7 @@ export default function ContentSections() {
               </h4>
               <ul className="space-y-3">
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">Careers</a></li>
+              
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Press</a></li>
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Partners</a></li>
               </ul>
@@ -802,13 +905,13 @@ export default function ContentSections() {
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Twitter / X</a></li>
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">Instagram</a></li>
                 <li><a href="#" className="text-white/70 hover:text-white transition-colors">YouTube</a></li>
-                <li><a href="#" className="text-white/70 hover:text-white transition-colors">LinkedIn</a></li>
+               
               </ul>
             </div>
           </div>
           <div className="pt-8 border-t border-white/[0.06] flex flex-col sm:flex-row justify-between items-center gap-4">
             <h3 className="text-xl font-light text-white/40">AI DJ PRO</h3>
-            <p className="text-sm text-white/30">© 2024. All systems operational.</p>
+            <p className="text-sm text-white/30">© 2026. All systems operational.</p>
           </div>
         </div>
       </footer>
